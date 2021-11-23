@@ -1,8 +1,12 @@
 import torch
 import torch.nn.functional as F
+import os
+import json
+from bin.utils import EnhancedJSONEncoder, get_best_value
 
 
-def train_model(epochs, training_dataloader, validation_dataloader, model, optimizer, device):
+def train_model(epochs, training_dataloader, validation_dataloader, model, optimizer, device, directory):
+    scores = {}
     # train
     for epoch in range(epochs):
         for i, (images, labels) in enumerate(training_dataloader):
@@ -17,9 +21,15 @@ def train_model(epochs, training_dataloader, validation_dataloader, model, optim
                 f"Train Epoch: {epoch} | Batch: {i}/{len(training_dataloader)} "
                 f"| Loss: {loss.item():.4f}"
             )
-        validate(validation_dataloader, model, device, epoch)
+        validate(validation_dataloader, model, device, epoch, directory, scores)
 
-def validate(validation_dataloader, model, device, epoch):
+    scores[f"Best_{get_best_value(scores)[0]}"] = get_best_value(scores)[1]
+    with open(os.path.join(directory, "scores.json"), "w") as fjson:
+        json.dump(scores, fjson, cls=EnhancedJSONEncoder)
+
+def validate(validation_dataloader, model, device, epoch, directory, scores):
+    best_scores = {'accuracy': 0, 'epoch': 0}
+    #scores = {}
     # validate
     val_loss = 0
     correct = 0
@@ -37,3 +47,9 @@ def validate(validation_dataloader, model, device, epoch):
         print(
             f"Val Epoch: {epoch} | Avg Loss: {val_loss:.4f} | Accuracy: {val_acc}"
         )
+        scores["Epoch_{}".format(epoch)] = val_acc
+        if val_acc >= best_scores['accuracy']:
+            best_scores['accuracy'] = val_acc
+            #best_scores['epoch'] = epoch
+            #scores["Best_Epoch_{}".format(epoch)] = val_acc
+            torch.save(model.cpu().state_dict(), os.path.join(directory, "model.pt"))

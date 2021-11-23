@@ -7,13 +7,20 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from ser.train import train_model
 from ser.transform import transform
+from ser.data import Parameters
+from bin.utils import EnhancedJSONEncoder
 
 import typer
+import json
+import pickle
+import os
+from datetime import datetime
 
 main = typer.Typer()
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+SAVE_DIR = PROJECT_ROOT / "run"
 
 
 @main.command()
@@ -34,7 +41,19 @@ def train(
     print(f"Running experiment {name}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # TODO: save the parameters!
+    #save the parameters!
+    params = Parameters(lr=learning_rate, b=batch_size, e=epochs)
+    # Best scores
+    scores = {}
+
+    # Create directory
+    date_time_obj = datetime.now()
+    timestamp_str = date_time_obj.strftime("%d-%b-%Y_(%H:%M:%S)")
+    directoryname = os.path.join(SAVE_DIR, name, f"{timestamp_str}")
+    # Create directory if it does not exist
+    Path(directoryname).mkdir(parents=True, exist_ok=True)
+    with open(os.path.join(directoryname, "config.json"), "w") as fjson:
+        json.dump(params, fjson, cls=EnhancedJSONEncoder)
 
     # load model
     model = Net().to(device)
@@ -63,7 +82,7 @@ def train(
     #Train
     train_model(epochs=epochs, training_dataloader=training_dataloader,
                 validation_dataloader=validation_dataloader, model=model,
-                optimizer=optimizer, device=device)
+                optimizer=optimizer, device=device, directory=directoryname)
 
 
 class Net(nn.Module):
@@ -95,3 +114,6 @@ class Net(nn.Module):
 @main.command()
 def infer():
     print("This is where the inference code will go")
+
+if __name__ == "__main__":
+    typer.run(train)
