@@ -1,3 +1,5 @@
+import json
+import os.path
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from ser.constants import RESULTS_DIR
 from ser.data import train_dataloader, val_dataloader, test_dataloader
 from ser.params import Params, save_params
 from ser.transforms import transforms, normalize
+from ser.infer import perform_infer
 
 main = typer.Typer()
 
@@ -27,7 +30,7 @@ def train(
     ),
     learning_rate: float = typer.Option(
         0.01, "-l", "--learning-rate", help="Learning rate for the model."
-    ),
+    )
 ):
     """Run the training algorithm."""
     repo = git.Repo(search_parent_directories=True)
@@ -59,11 +62,18 @@ def train(
 
 
 @main.command()
-def infer():
-    run_path = Path("./path/to/one/of/your/training/runs")
-    label = 6
+def infer(
+        trained_model: Path = typer.Option(
+            ..., "-m", "--trained_model", help="Name of the experiment"
+        )
+):
+    label = 2
 
     # TODO load the parameters from the run_path so we can print them out!
+    with open(trained_model / "params.json") as f:
+        params = json.load(f)
+        print("Experiment name:", params['name'])
+        print("Parameter: ", params)
 
     # select image to run inference for
     dataloader = test_dataloader(1, transforms(normalize))
@@ -72,34 +82,8 @@ def infer():
         images, labels = next(iter(dataloader))
 
     # load the model
-    model = torch.load(run_path / "model.pt")
-
-    # run inference
-    model.eval()
-    output = model(images)
-    pred = output.argmax(dim=1, keepdim=True)[0].item()
-    certainty = max(list(torch.exp(output)[0]))
-    pixels = images[0][0]
-    print(generate_ascii_art(pixels))
+    model = torch.load(trained_model / "model.pt")
+    pred, certainty = perform_infer(model, images)
     print(f"This is a {pred}")
+    print(f"This is the certainty {certainty}")
 
-
-def generate_ascii_art(pixels):
-    ascii_art = []
-    for row in pixels:
-        line = []
-        for pixel in row:
-            line.append(pixel_to_char(pixel))
-        ascii_art.append("".join(line))
-    return "\n".join(ascii_art)
-
-
-def pixel_to_char(pixel):
-    if pixel > 0.99:
-        return "O"
-    elif pixel > 0.9:
-        return "o"
-    elif pixel > 0:
-        return "."
-    else:
-        return " "
